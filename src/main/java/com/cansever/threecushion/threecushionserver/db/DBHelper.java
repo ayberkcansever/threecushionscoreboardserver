@@ -1,6 +1,7 @@
 package com.cansever.threecushion.threecushionserver.db;
 
 import com.cansever.threecushion.threecushionserver.bean.GameBean;
+import com.cansever.threecushion.threecushionserver.bean.GameEvent;
 import com.cansever.threecushion.threecushionserver.cache.CacheHolder;
 import com.datastax.driver.core.*;
 import com.google.common.base.Strings;
@@ -59,21 +60,21 @@ public class DBHelper {
             session = cluster.connect(dbKeyspace);
         }
 
-        newGamePs = session.prepare("insert into game (id, " +
+        newGamePs = session.prepare("insert into game (id, innings, " +
                 " player1, player1_id, player1_pic_url," +
                 " player2, player2_id, player2_pic_url, " +
                 " score_player1, score_player2, " +
                 " start_date, turn) " +
-                " values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) using ttl 18000");
-        finishedGamePs = session.prepare("insert into finished_game (id, " +
+                " values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) using ttl 18000");
+        finishedGamePs = session.prepare("insert into finished_game (id, innings, " +
                 " player1, player1_id, player1_pic_url," +
                 " player2, player2_id, player2_pic_url, " +
                 " score_player1, score_player2, " +
-                " start_date, end_date) " +
-                " values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                " start_date, end_date, turn) " +
+                " values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         deleteGamePs = session.prepare("delete from game where id = ?");
         insertPlayerGamePs = session.prepare("insert into player_game (player_id, game_id) values(?, ?) using ttl 18000");
-        insertPlayerGamePs = session.prepare("insert into player_finished_game (player_id, game_id) values(?, ?)");
+        insertPlayerFinishedGamePs = session.prepare("insert into player_finished_game (player_id, game_id) values(?, ?)");
         deletePlayerGamePs = session.prepare("delete from player_game where player_id = ?");
         loadGamePs = session.prepare("select * from game where id = ?");
         loadPlayersGamePs = session.prepare("select * from player_game where player_id = ?");
@@ -83,29 +84,46 @@ public class DBHelper {
     public String insertNewGame(GameBean gameBean){
         String gameId = Hashing.murmur3_32(12).hashString(gameBean.getPlayer1() + gameBean.getPlayer2() + String.valueOf(System.currentTimeMillis()), Charset.defaultCharset()).toString();
         session.execute(newGamePs.bind(
-                gameId,
+                gameId, 0,
                 gameBean.getPlayer1(), gameBean.getPlayer1Id(), gameBean.getPlayer1PicUrl(),
                 gameBean.getPlayer2(), gameBean.getPlayer2Id(), gameBean.getPlayer2PicUrl(),
                 gameBean.getScorePlayer1(), gameBean.getScorePlayer2(),
                 new Date(), 1)
         );
-        session.execute(insertPlayerGamePs.bind(gameBean.getPlayer1(), gameId));
-        cacheHolder.getPlayerGameCache().put(gameBean.getPlayer1(), gameId);
-        session.execute(insertPlayerGamePs.bind(gameBean.getPlayer2(), gameId));
-        cacheHolder.getPlayerGameCache().put(gameBean.getPlayer2(), gameId);
+        session.execute(insertPlayerGamePs.bind(gameBean.getPlayer1Id(), gameId));
+        cacheHolder.getPlayerGameCache().put(gameBean.getPlayer1Id(), gameId);
+        session.execute(insertPlayerGamePs.bind(gameBean.getPlayer2Id(), gameId));
+        cacheHolder.getPlayerGameCache().put(gameBean.getPlayer2Id(), gameId);
         gameBean.setId(gameId);
         cacheHolder.getGamesCache().put(gameId, gameBean);
         return gameId;
     }
 
-    public void deleteGame(String gameId){
-        GameBean gameBean = loadGame(gameId);
-        session.execute(deleteGamePs.bind(gameId));
-        cacheHolder.getGamesCache().remove(gameId);
+    public void updateGame(GameBean gameBean) {
+        session.execute(newGamePs.bind(
+                        gameBean.getId(), gameBean.getInnings(),
+                        gameBean.getPlayer1(), gameBean.getPlayer1Id(), gameBean.getPlayer1PicUrl(),
+                        gameBean.getPlayer2(), gameBean.getPlayer2Id(), gameBean.getPlayer2PicUrl(),
+                        gameBean.getScorePlayer1(), gameBean.getScorePlayer2(),
+                        gameBean.getStartDate(), gameBean.getTurn())
+        );
+        cacheHolder.getGamesCache().put(gameBean.getId(), gameBean);
+    }
+
+    public void deleteGame(GameBean gameBean){
+        if(gameBean == null) {
+            return;
+        }
+        session.execute(deleteGamePs.bind(gameBean.getId()));
+        cacheHolder.getGamesCache().remove(gameBean.getId());
         session.execute(deletePlayerGamePs.bind(gameBean.getPlayer1Id()));
-        cacheHolder.getPlayerGameCache().remove(gameBean.getPlayer1());
+        cacheHolder.getPlayerGameCache().remove(gameBean.getPlayer1Id());
         session.execute(deletePlayerGamePs.bind(gameBean.getPlayer2Id()));
-        cacheHolder.getPlayerGameCache().remove(gameBean.getPlayer2());
+        cacheHolder.getPlayerGameCache().remove(gameBean.getPlayer2Id());
+    }
+
+    public void deleteGame(String gameId){
+        deleteGame(loadGame(gameId));
     }
 
     public GameBean loadPlayersGame(String playerId) {
@@ -153,11 +171,11 @@ public class DBHelper {
     public void finishGame(String gameId){
         GameBean gameBean = loadGame(gameId);
         session.execute(finishedGamePs.bind(
-                gameId,
+                gameId, gameBean.getInnings(),
                 gameBean.getPlayer1(), gameBean.getPlayer1Id(), gameBean.getPlayer1PicUrl(),
                 gameBean.getPlayer2(), gameBean.getPlayer2Id(), gameBean.getPlayer2PicUrl(),
                 gameBean.getScorePlayer1(), gameBean.getScorePlayer2(),
-                gameBean.getStartDate(), new Date()
+                gameBean.getStartDate(), new Date(), gameBean.getTurn()
         ));
         cacheHolder.getFinishedGamesCache().put(gameId, gameBean);
         session.execute(insertPlayerFinishedGamePs.bind(gameBean.getPlayer1Id(), gameId));
@@ -174,7 +192,7 @@ public class DBHelper {
             mutableEntry.setValue(oldList);
             return null;
         });
-        deleteGame(gameId);
+        deleteGame(gameBean);
     }
 
     public List<GameBean> getPlayersFinishedGames(String playerId) {
@@ -191,6 +209,31 @@ public class DBHelper {
             cacheHolder.getPlayerFinishedGamesCache().put(playerId, gameIdList);
         }
         return finishedGames;
+    }
+
+    public void processGameEvent(GameEvent gameEvent){
+        GameBean gameBean = loadGame(gameEvent.getGameId());
+        if(gameBean != null) {
+            if("enter".equals(gameEvent.getEventType())) {
+                int newTurn = 1;
+                int run = Integer.parseInt(gameEvent.getEventParams()[0]);
+                if(gameBean.getPlayer1Id().equals(gameEvent.getUserId())) {
+                    gameBean.setScorePlayer1(gameBean.getScorePlayer1() + run);
+                    if(run >= 0) {
+                        gameBean.setInnings(gameBean.getInnings() + 1);
+                        newTurn = 2;
+                    }
+                } else if(gameBean.getPlayer2Id().equals(gameEvent.getUserId())) {
+                    gameBean.setScorePlayer2(gameBean.getScorePlayer2() + Integer.parseInt(gameEvent.getEventParams()[0]));
+                }
+                if(run >= 0) {
+                    gameBean.setTurn(newTurn);
+                }
+                updateGame(gameBean);
+            } else if("innings".equals(gameEvent.getEventType())) {
+
+            }
+        }
     }
 
 }

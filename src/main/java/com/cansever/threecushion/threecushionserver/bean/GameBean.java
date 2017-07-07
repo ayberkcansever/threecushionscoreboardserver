@@ -10,6 +10,7 @@ import java.util.Date;
 public class GameBean {
 
     private String id;
+    private int innings;
     private String player1;
     private String player1Id;
     private String player1PicUrl;
@@ -24,6 +25,14 @@ public class GameBean {
 
     public String getId() {
         return id;
+    }
+
+    public int getInnings() {
+        return innings;
+    }
+
+    public void setInnings(int innings) {
+        this.innings = innings;
     }
 
     public void setId(String id) {
@@ -117,4 +126,5 @@ public class GameBean {
     public void setEndDate(Date endDate) {
         this.endDate = endDate;
     }
+
 }

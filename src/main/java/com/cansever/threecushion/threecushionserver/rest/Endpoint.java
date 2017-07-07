@@ -1,6 +1,7 @@
 package com.cansever.threecushion.threecushionserver.rest;
 
 import com.cansever.threecushion.threecushionserver.bean.GameBean;
+import com.cansever.threecushion.threecushionserver.bean.GameEvent;
 import com.cansever.threecushion.threecushionserver.db.DBHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,24 @@ public class Endpoint {
     @Path("/start")
     public String startGame(@RequestBody GameBean gameBean) {
         return dbHelper.insertNewGame(gameBean);
+    }
+
+    @POST
+    @Path("/cancel/{gameId}")
+    public void cancelGame(@PathParam("gameId") String gameId) {
+        dbHelper.deleteGame(gameId);
+    }
+
+    @POST
+    @Path("/finish/{gameId}")
+    public void finishGame(@PathParam("gameId") String gameId) {
+        dbHelper.finishGame(gameId);
+    }
+
+    @POST
+    @Path("/event")
+    public void processEvent(@RequestBody GameEvent gameEvent) {
+        dbHelper.processGameEvent(gameEvent);
     }
 
 }

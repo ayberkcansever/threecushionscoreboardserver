@@ -37,6 +37,7 @@
             <list>
                 <bean class="org.apache.ignite.configuration.CacheConfiguration">
                     <property name="name" value="gamesCache"/>
+                    <property name="onheapCacheEnabled" value="true"/>
                     <property name="atomicityMode" value="ATOMIC"/>
                     <property name="cacheMode" value="REPLICATED"/>
                     <property name="evictionPolicy">
@@ -47,6 +48,7 @@
                 </bean>
                 <bean class="org.apache.ignite.configuration.CacheConfiguration">
                     <property name="name" value="playerGameCache"/>
+                    <property name="onheapCacheEnabled" value="true"/>
                     <property name="atomicityMode" value="ATOMIC"/>
                     <property name="cacheMode" value="REPLICATED"/>
                     <property name="evictionPolicy">
@@ -57,6 +59,7 @@
                 </bean>
                 <bean class="org.apache.ignite.configuration.CacheConfiguration">
                     <property name="name" value="finishedGamesCache"/>
+                    <property name="onheapCacheEnabled" value="true"/>
                     <property name="atomicityMode" value="ATOMIC"/>
                     <property name="cacheMode" value="REPLICATED"/>
                     <property name="evictionPolicy">
@@ -67,6 +70,7 @@
                 </bean>
                 <bean class="org.apache.ignite.configuration.CacheConfiguration">
                     <property name="name" value="playerFinishedGamesCache"/>
+                    <property name="onheapCacheEnabled" value="true"/>
                     <property name="atomicityMode" value="ATOMIC"/>
                     <property name="cacheMode" value="REPLICATED"/>
                     <property name="evictionPolicy">
