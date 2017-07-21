@@ -1,6 +1,8 @@
 package com.cansever.threecushion.threecushionserver.bean;
 
-import java.math.BigDecimal;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.List;
 
 /**
@@ -8,31 +10,8 @@ import java.util.List;
  */
 public class ProfileBean {
 
-    private int winPercentage;
-    private String generalAverage;
-    private List<GameBean> lastGames;
+    @Getter @Setter private int winPercentage;
+    @Getter @Setter private String generalAverage;
+    @Getter @Setter  private List<GameBean> lastGames;
 
-    public int getWinPercentage() {
-        return winPercentage;
-    }
-
-    public void setWinPercentage(int winPercentage) {
-        this.winPercentage = winPercentage;
-    }
-
-    public String getGeneralAverage() {
-        return generalAverage;
-    }
-
-    public void setGeneralAverage(String generalAverage) {
-        this.generalAverage = generalAverage;
-    }
-
-    public List<GameBean> getLastGames() {
-        return lastGames;
-    }
-
-    public void setLastGames(List<GameBean> lastGames) {
-        this.lastGames = lastGames;
-    }
 }

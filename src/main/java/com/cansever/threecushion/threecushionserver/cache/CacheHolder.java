@@ -1,6 +1,7 @@
 package com.cansever.threecushion.threecushionserver.cache;
 
 import com.cansever.threecushion.threecushionserver.bean.GameBean;
+import lombok.Getter;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
 import org.apache.ignite.Ignition;
@@ -16,10 +17,10 @@ import java.util.List;
 public class CacheHolder {
 
     private Ignite ignite;
-    private IgniteCache<String, GameBean> gamesCache;
-    private IgniteCache<String, String> playerGameCache;
-    private IgniteCache<String, GameBean> finishedGamesCache;
-    private IgniteCache<String, List<String>> playerFinishedGamesCache;
+    @Getter private IgniteCache<String, GameBean> gamesCache;
+    @Getter private IgniteCache<String, String> playerGameCache;
+    @Getter private IgniteCache<String, GameBean> finishedGamesCache;
+    @Getter private IgniteCache<String, List<String>> playerFinishedGamesCache;
 
     @PostConstruct
     public void init(){
@@ -30,19 +31,4 @@ public class CacheHolder {
         playerFinishedGamesCache = ignite.getOrCreateCache("playerFinishedGamesCache");
     }
 
-    public IgniteCache<String, String> getPlayerGameCache() {
-        return playerGameCache;
-    }
-
-    public IgniteCache<String, GameBean> getGamesCache() {
-        return gamesCache;
-    }
-
-    public IgniteCache<String, GameBean> getFinishedGamesCache() {
-        return finishedGamesCache;
-    }
-
-    public IgniteCache<String, List<String>> getPlayerFinishedGamesCache() {
-        return playerFinishedGamesCache;
-    }
 }

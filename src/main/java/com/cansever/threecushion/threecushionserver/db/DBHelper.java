@@ -2,6 +2,7 @@ package com.cansever.threecushion.threecushionserver.db;
 
 import com.cansever.threecushion.threecushionserver.bean.GameBean;
 import com.cansever.threecushion.threecushionserver.bean.GameEvent;
+import com.cansever.threecushion.threecushionserver.bean.ProfileBean;
 import com.cansever.threecushion.threecushionserver.cache.CacheHolder;
 import com.datastax.driver.core.*;
 import com.google.common.base.Strings;
@@ -12,10 +13,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
 import javax.annotation.PostConstruct;
-import javax.cache.processor.EntryProcessorException;
-import javax.cache.processor.MutableEntry;
 import java.nio.charset.Charset;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -27,6 +29,9 @@ public class DBHelper {
 
     @Value( "${db.points}" )
     private String dbPoints;
+
+    @Value( "${db.port}" )
+    private int dbPort;
 
     @Value( "${db.keyspace}" )
     private String dbKeyspace;
@@ -41,6 +46,8 @@ public class DBHelper {
     private PreparedStatement insertPlayerFinishedGamePs;
     private PreparedStatement deletePlayerGamePs;
     private PreparedStatement loadPlayersGamePs;
+    private PreparedStatement loadFinishedGamePs;
+    private PreparedStatement deletePlayerFinishedGamePs;
     private PreparedStatement loadPlayersFinishedGamesPs;
     private PreparedStatement loadGamePs;
 
@@ -50,7 +57,7 @@ public class DBHelper {
     @PostConstruct
     public void init(){
         if(cluster == null) {
-            Cluster.Builder clusterBuilder = Cluster.builder();
+            Cluster.Builder clusterBuilder = Cluster.builder().withPort(dbPort);
             for(String contactPoint : dbPoints.split(",")) {
                 clusterBuilder.addContactPoint(contactPoint);
             }
@@ -78,17 +85,20 @@ public class DBHelper {
         deletePlayerGamePs = session.prepare("delete from player_game where player_id = ?");
         loadGamePs = session.prepare("select * from game where id = ?");
         loadPlayersGamePs = session.prepare("select * from player_game where player_id = ?");
+        deletePlayerFinishedGamePs = session.prepare("delete from player_finished_game where player_id = ? and game_id = ?");
+        loadFinishedGamePs = session.prepare("select * from finished_game where id = ?");
         loadPlayersFinishedGamesPs = session.prepare("select * from player_finished_game where player_id = ?");
     }
 
     public String insertNewGame(GameBean gameBean){
         String gameId = Hashing.murmur3_32(12).hashString(gameBean.getPlayer1() + gameBean.getPlayer2() + String.valueOf(System.currentTimeMillis()), Charset.defaultCharset()).toString();
+        gameBean.setStartDate(new java.sql.Timestamp(new Date().getTime()));
         session.execute(newGamePs.bind(
                 gameId, 0,
                 gameBean.getPlayer1(), gameBean.getPlayer1Id(), gameBean.getPlayer1PicUrl(),
                 gameBean.getPlayer2(), gameBean.getPlayer2Id(), gameBean.getPlayer2PicUrl(),
                 gameBean.getScorePlayer1(), gameBean.getScorePlayer2(),
-                new Date(), 1)
+                gameBean.getStartDate(), 1)
         );
         session.execute(insertPlayerGamePs.bind(gameBean.getPlayer1Id(), gameId));
         cacheHolder.getPlayerGameCache().put(gameBean.getPlayer1Id(), gameId);
@@ -160,7 +170,7 @@ public class DBHelper {
                 gameBean.setPlayer2PicUrl(row.getString("player2_pic_url"));
                 gameBean.setScorePlayer1(row.getInt("score_player1"));
                 gameBean.setScorePlayer2(row.getInt("score_player2"));
-                gameBean.setStartDate(row.getTimestamp("start_date"));
+                gameBean.setStartDate(new java.sql.Timestamp(row.getTimestamp("start_date").getTime()));
                 gameBean.setTurn(row.getInt("turn"));
             }
             cacheHolder.getGamesCache().put(id, gameBean);
@@ -168,14 +178,51 @@ public class DBHelper {
         return gameBean;
     }
 
+    public GameBean loadFinishedGame(String gameId){
+        GameBean gameBean = cacheHolder.getFinishedGamesCache().get(gameId);
+        if(gameBean == null) {
+            gameBean = new GameBean();
+            ResultSet rs = session.execute(loadFinishedGamePs.bind(gameId));
+            for (Row row : rs) {
+                gameBean.setId(row.getString("id"));
+                gameBean.setPlayer1(row.getString("player1"));
+                gameBean.setPlayer1Id(row.getString("player1_id"));
+                gameBean.setPlayer1PicUrl(row.getString("player1_pic_url"));
+                gameBean.setPlayer2(row.getString("player2"));
+                gameBean.setPlayer2Id(row.getString("player2_id"));
+                gameBean.setPlayer2PicUrl(row.getString("player2_pic_url"));
+                gameBean.setScorePlayer1(row.getInt("score_player1"));
+                gameBean.setScorePlayer2(row.getInt("score_player2"));
+                gameBean.setStartDate(new java.sql.Timestamp(row.getTimestamp("start_date").getTime()));
+                gameBean.setEndDate(new java.sql.Timestamp(row.getTimestamp("end_date").getTime()));
+                gameBean.setTurn(row.getInt("turn"));
+                gameBean.setInnings(row.getInt("innings"));
+            }
+            cacheHolder.getFinishedGamesCache().put(gameId, gameBean);
+        }
+        return gameBean;
+    }
+
+    public ProfileBean deletePlayerFinishedGame(String playerId, String gameId) {
+        session.execute(deletePlayerFinishedGamePs.bind(playerId, gameId));
+        cacheHolder.getPlayerFinishedGamesCache().invoke(playerId, (CacheEntryProcessor<String, List<String>, Object>) (mutableEntry, objects) -> {
+            List<String> oldList = mutableEntry.getValue();
+            oldList.remove(gameId);
+            mutableEntry.setValue(oldList);
+            return null;
+        });
+        return getPlayersProfile(playerId);
+    }
+
     public void finishGame(String gameId){
         GameBean gameBean = loadGame(gameId);
+        gameBean.setEndDate(new java.sql.Timestamp(new Date().getTime()));
         session.execute(finishedGamePs.bind(
                 gameId, gameBean.getInnings(),
                 gameBean.getPlayer1(), gameBean.getPlayer1Id(), gameBean.getPlayer1PicUrl(),
                 gameBean.getPlayer2(), gameBean.getPlayer2Id(), gameBean.getPlayer2PicUrl(),
                 gameBean.getScorePlayer1(), gameBean.getScorePlayer2(),
-                gameBean.getStartDate(), new Date(), gameBean.getTurn()
+                gameBean.getStartDate(), gameBean.getEndDate(), gameBean.getTurn()
         ));
         cacheHolder.getFinishedGamesCache().put(gameId, gameBean);
         session.execute(insertPlayerFinishedGamePs.bind(gameBean.getPlayer1Id(), gameId));
@@ -195,7 +242,8 @@ public class DBHelper {
         deleteGame(gameBean);
     }
 
-    public List<GameBean> getPlayersFinishedGames(String playerId) {
+    public ProfileBean getPlayersProfile(String playerId, String... searchStr) {
+        ProfileBean profileBean = new ProfileBean();
         List<GameBean> finishedGames = new ArrayList<>();
         List<String> gameIdList = cacheHolder.getPlayerFinishedGamesCache().get(playerId);
         if(gameIdList == null) {
@@ -204,11 +252,50 @@ public class DBHelper {
             for (Row row : rs) {
                 String gameId = row.getString("game_id");
                 gameIdList.add(gameId);
-                finishedGames.add(loadGame(gameId));
             }
             cacheHolder.getPlayerFinishedGamesCache().put(playerId, gameIdList);
         }
-        return finishedGames;
+        int wonGamesCount = 0, totalGamesCount = 0;
+        int totalPoinstCount = 0, totalInnings = 0;
+        for(String gameId : gameIdList) {
+            GameBean gameBean = loadFinishedGame(gameId);
+            if(gameBean != null) {
+                boolean firstPlayer = gameBean.getPlayer1Id().equals(playerId);
+                boolean secondPlayer = gameBean.getPlayer2Id().equals(playerId);
+                if(searchStr.length == 0 || (searchStr.length > 0 && searchStr[0] != null
+                        && (firstPlayer && gameBean.getPlayer2().toUpperCase().contains(searchStr[0].toUpperCase()))
+                        || (secondPlayer && gameBean.getPlayer1().toUpperCase().contains(searchStr[0].toUpperCase())))) {
+                    finishedGames.add(gameBean);
+                    int innings = gameBean.getInnings();
+                    if(firstPlayer) {
+                        totalPoinstCount += gameBean.getScorePlayer1();
+                        if(gameBean.getScorePlayer1() > gameBean.getScorePlayer2()) {
+                            wonGamesCount++;
+                        }
+                    } else if(secondPlayer) {
+                        totalPoinstCount += gameBean.getScorePlayer2();
+                        if(gameBean.getScorePlayer2() > gameBean.getScorePlayer1()) {
+                            wonGamesCount++;
+                        }
+                        if(gameBean.getTurn() == 2) {
+                            innings--;
+                        }
+                    }
+                    totalGamesCount++;
+                    totalInnings += innings;
+                }
+            }
+        }
+        NumberFormat formatter = new DecimalFormat("#0.000");
+        if(totalGamesCount > 0) {
+            profileBean.setWinPercentage(wonGamesCount * 100 / totalGamesCount);
+        }
+        if(totalInnings > 0) {
+            profileBean.setGeneralAverage(formatter.format((double) totalPoinstCount / (double) totalInnings));
+        }
+        Collections.sort(finishedGames);
+        profileBean.setLastGames(finishedGames.size() <= 10 ? finishedGames : finishedGames.subList(0, 10));
+        return profileBean;
     }
 
     public void processGameEvent(GameEvent gameEvent){
@@ -231,7 +318,13 @@ public class DBHelper {
                 }
                 updateGame(gameBean);
             } else if("innings".equals(gameEvent.getEventType())) {
-
+                String direction = gameEvent.getEventParams()[0];
+                if("+".equals(direction)) {
+                    gameBean.setInnings(gameBean.getInnings() + 1);
+                } else if("-".equals(direction)) {
+                    gameBean.setInnings(gameBean.getInnings() - 1);
+                }
+                updateGame(gameBean);
             }
         }
     }

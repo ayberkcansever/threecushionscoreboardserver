@@ -1,5 +1,8 @@
 package com.cansever.threecushion.threecushionserver.bean;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Arrays;
 
 /**
@@ -7,42 +10,10 @@ import java.util.Arrays;
  */
 public class GameEvent {
 
-    private String gameId;
-    private String userId;
-    private String eventType;
-    private String[] eventParams;
-
-    public String getGameId() {
-        return gameId;
-    }
-
-    public void setGameId(String gameId) {
-        this.gameId = gameId;
-    }
-
-    public String getUserId() {
-        return userId;
-    }
-
-    public void setUserId(String userId) {
-        this.userId = userId;
-    }
-
-    public String getEventType() {
-        return eventType;
-    }
-
-    public void setEventType(String eventType) {
-        this.eventType = eventType;
-    }
-
-    public String[] getEventParams() {
-        return eventParams;
-    }
-
-    public void setEventParams(String[] eventParams) {
-        this.eventParams = eventParams;
-    }
+    @Getter @Setter private String gameId;
+    @Getter @Setter private String userId;
+    @Getter @Setter private String eventType;
+    @Getter @Setter private String[] eventParams;
 
     @Override
     public String toString() {
