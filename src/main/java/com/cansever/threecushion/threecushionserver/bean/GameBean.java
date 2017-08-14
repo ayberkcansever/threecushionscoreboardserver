@@ -26,10 +26,6 @@ public class GameBean implements Comparable<GameBean> {
     @Getter @Setter private Timestamp startDate;
     @Getter @Setter private Timestamp endDate;
 
-    @Override
-    public int compareTo(GameBean o) {
-        return o.getEndDate().compareTo(endDate);
-    }
 
     @Override
     public boolean equals(Object o) {
@@ -47,4 +43,10 @@ public class GameBean implements Comparable<GameBean> {
     public int hashCode() {
         return id.hashCode();
     }
+
+    @Override
+    public int compareTo(GameBean o) {
+        return o.getEndDate().compareTo(endDate);
+    }
+
 }
