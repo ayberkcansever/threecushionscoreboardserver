@@ -1,1 +1,1 @@
-mvn clean package -Dmaven.repo.local=$HOME/.m2 -Dmaven.test.skip=true
+mvn clean package -Dmaven.repo.local=$HOME/.m2/repository -Dmaven.test.skip=true
